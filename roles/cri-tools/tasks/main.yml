@@ -1,0 +1,46 @@
+---
+#- stat:
+#    path: "/tmp/crictl-{{critools.version}}-linux-amd64.tar.gz"
+#  register: crictl_linux_amd64
+#  run_once: true
+#  delegate_to: 127.0.0.1
+
+#- name: "本地不存在，则下载crictl-{{critools.version}}-linux-amd64.tar.gz"
+#  #  when: not crictl_linux_amd64.exists
+#  shell: "wget https://github.com/kubernetes-sigs/cri-tools/releases/download/{{critools.version}}/crictl-{{critools.version}}-linux-amd64.tar.gz -P /tmp/"
+#  run_once: true
+#  delegate_to: 127.0.0.1
+
+- name: "Install rsync"
+  yum:
+      name: rsync
+      state: present
+
+- name: "Config cri-tools"
+  template:
+    src: "crictl.yaml.j2"
+    dest: "/etc/crictl.yaml"
+    owner: root
+    group: root
+    mode: 0644
+
+- name: "copy /tmp/crictl-{{critools.version}}-linux-amd64.tar.gz master worker nodes"
+  synchronize:
+    src: "/tmp/crictl-{{critools.version}}-linux-amd64.tar.gz"
+    dest: "/tmp/"
+    mode: push
+
+- name: Install cri-tools
+  shell: tar -zxf /tmp/crictl-{{critools.version}}-linux-amd64.tar.gz -C /usr/bin/
+
+- name: Get crictl completion
+  command: "/usr/bin/crictl completion"
+  changed_when: False
+  register: cri_completion
+  check_mode: false
+
+- name: Install crictl completion
+  copy:
+    dest: /etc/bash_completion.d/crictl
+    content: "{{ cri_completion.stdout }}"
+    mode: 0644

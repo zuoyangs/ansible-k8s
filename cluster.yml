@@ -1,0 +1,58 @@
+---
+- name: "Verify Settings"
+  hosts: haproxy etcd master worker
+  roles:
+    - role: verify
+      tags: verify
+
+- name: "生成相关证书"
+  hosts: localhost
+  connection: local
+  roles:
+    - role: cert
+      tags: cert
+
+- name: "初始化系统环境"
+  hosts: haproxy etcd master worker
+  roles:
+    - role: init
+
+- name: "创建 HAproxy + Keepalived 服务"
+  hosts: haproxy
+  roles:
+    - role: haproxy
+    - role: keepalived
+
+- name: "创建 etcd 服务"
+  hosts: etcd
+  roles:
+    - role: etcd
+
+- name: "Set Control Plane Nodes"
+  hosts: master
+  roles:
+    - role: master
+
+- name: "Set Worker Nodes"
+  hosts: master worker
+  roles:
+    - role: containerd
+      tags: containerd
+    - role: cri-tools
+      tags: cri-tools
+    - role: cni-plugins
+      tags: cni-plugins
+    - role: worker
+      tags: worker
+
+- name: "Set Container Networking Plugins"
+  hosts: master[0]
+  roles:
+    - role: network-plugins
+      tags: network-plugins
+
+- name: "Set Kubernetes Addons"
+  hosts: master[0]
+  roles:
+    - role: addons
+      tags: addons

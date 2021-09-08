@@ -1,0 +1,239 @@
+---
+- name: "Create kubernetes user group"
+  group:
+    name: kube
+    gid: 200
+    system: yes
+
+- name: Create kubernetes user
+  user:
+    name: kube
+    uid: 200
+    group: kube
+    comment: "Kubernetes User"
+    createhome: no
+    shell: /sbin/nologin
+    system: yes
+
+- name: "Create kubernetes directory"
+  file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: 0755
+    state: directory
+  with_items:
+    - "~/.kube"
+    - "/etc/kubernetes/pki"
+    - "/etc/kubernetes/pki"
+
+- name: "Create kubernetes log directory"
+  file:
+    path: "/var/log/kubernetes"
+    owner: kube
+    group: kube
+    mode: 0755
+    state: directory
+
+- name: "Create kubernetes-server-{{ kubernetes.version }}-linux directory"
+  file:
+    path: "/tmp/kubernetes-server-{{ kubernetes.version }}-linux/"
+    owner: kube
+    group: kube
+    mode: 0755
+    state: directory
+  run_once: true
+  delegate_to: 127.0.0.1
+
+- name: "Wget https://dl.k8s.io/{{ kubernetes.version }}/kubernetes-server-linux-amd64.tar.gz"
+  get_url:
+    url: "https://dl.k8s.io/{{ kubernetes.version }}/kubernetes-server-linux-amd64.tar.gz"
+    owner: kube
+    group: kube
+    mode: 0644
+    dest: "/tmp/kubernetes-server-{{ kubernetes.version }}-linux/"
+  run_once: true
+  delegate_to: 127.0.0.1
+
+- name: "unarchive kubernetes"
+  unarchive:
+    src: "/tmp/kubernetes-server-{{ kubernetes.version }}-linux/kubernetes-server-linux-amd64.tar.gz"
+    dest: "/tmp/kubernetes-server-{{ kubernetes.version }}-linux/"
+    owner: kube
+    group: kube
+    remote_src: yes
+  run_once: true
+  delegate_to: 127.0.0.1
+
+- name: "copy kubectl/kube-apiserve/kube-controller-manage/kube-schedule to master node /usr/bin/"
+  copy:
+    src: "{{ item.line }}"
+    owner: kube
+    group: kube
+    mode: 0750
+    dest: /usr/bin/
+  with_items:
+    - {line: "/tmp/kubernetes-server-{{ kubernetes.version }}-linux/kubernetes/server/bin/kubectl"}
+    - {line: "/tmp/kubernetes-server-{{ kubernetes.version }}-linux/kubernetes/server/bin/kubeadm"}
+    - {line: "/tmp/kubernetes-server-{{ kubernetes.version }}-linux/kubernetes/server/bin/kubectl-convert"}
+    - {line: "/tmp/kubernetes-server-{{ kubernetes.version }}-linux/kubernetes/server/bin/apiextensions-apiserver"}
+    - {line: "/tmp/kubernetes-server-{{ kubernetes.version }}-linux/kubernetes/server/bin/kube-aggregator"}
+    - {line: "/tmp/kubernetes-server-{{ kubernetes.version }}-linux/kubernetes/server/bin/kube-apiserver"}
+    - {line: "/tmp/kubernetes-server-{{ kubernetes.version }}-linux/kubernetes/server/bin/kube-controller-manager"}
+    - {line: "/tmp/kubernetes-server-{{ kubernetes.version }}-linux/kubernetes/server/bin/kube-scheduler"}
+    - {line: "/tmp/kubernetes-server-{{ kubernetes.version }}-linux/kubernetes/server/bin/kubelet"}
+    - {line: "/tmp/kubernetes-server-{{ kubernetes.version }}-linux/kubernetes/server/bin/kube-proxy"}
+    - {line: "/tmp/kubernetes-server-{{ kubernetes.version }}-linux/kubernetes/server/bin/mounter"}
+  ignore_errors: yes
+
+- name: "Distribution master certs"
+  copy:
+    src: "{{ item.line }}"
+    dest: "/etc/kubernetes/pki/"
+    owner: kube
+    group: kube
+    mode: 0644
+  with_items:
+    - {line: '{{ cert.dir }}/ca.key'}
+    - {line: '{{ cert.dir }}/ca.pem'}
+    - {line: '{{ cert.dir }}/sa.key'}
+    - {line: '{{ cert.dir }}/sa.pub'}
+    - {line: '{{ cert.dir }}/etcd-ca.pem'}
+    - {line: '{{ cert.dir }}/{{ ansible_default_ipv4.address }}/apiserver.key'}
+    - {line: '{{ cert.dir }}/{{ ansible_default_ipv4.address }}/apiserver.pem'}
+    - {line: '{{ cert.dir }}/{{ ansible_default_ipv4.address }}/apiserver-etcd-client.key'}
+    - {line: '{{ cert.dir }}/{{ ansible_default_ipv4.address }}/apiserver-etcd-client.pem'}
+    - {line: '{{ cert.dir }}/{{ ansible_default_ipv4.address }}/apiserver-kubelet-client.key'}
+    - {line: '{{ cert.dir }}/{{ ansible_default_ipv4.address }}/apiserver-kubelet-client.pem'}
+    - {line: '{{ cert.dir }}/front-proxy-ca.key'}
+    - {line: '{{ cert.dir }}/front-proxy-ca.pem'}
+    - {line: '{{ cert.dir }}/{{ ansible_default_ipv4.address }}/front-proxy-client.key'}
+    - {line: '{{ cert.dir }}/{{ ansible_default_ipv4.address }}/front-proxy-client.pem'}
+    - {line: '{{ cert.dir }}/{{ ansible_default_ipv4.address }}/controller-manager.key'}
+    - {line: '{{ cert.dir }}/{{ ansible_default_ipv4.address }}/controller-manager.pem'}
+    - {line: '{{ cert.dir }}/{{ ansible_default_ipv4.address }}/scheduler.key'}
+    - {line: '{{ cert.dir }}/{{ ansible_default_ipv4.address }}/scheduler.pem'}
+    - {line: '{{ cert.dir }}/{{ ansible_default_ipv4.address }}/admin.key'}
+    - {line: '{{ cert.dir }}/{{ ansible_default_ipv4.address }}/admin.pem'}
+
+- name: "Distribution kubectl kubeconfig"
+  template:
+    src: "admin.kubeconfig.j2"
+    owner: kube
+    group: kube
+    mode: 0600
+    dest: "~/.kube/config"
+
+- name: "Distribution master kubeconfig"
+  template:
+    src: "{{ item.src }}"
+    owner: kube
+    group: kube
+    mode: 0640
+    dest: "{{ item.dest }}"
+  with_items:
+    - {src: "admin.kubeconfig.j2",dest: "~/.kube/config" }
+    - {src: "controller-manager.kubeconfig.j2",dest: "/etc/kubernetes/controller-manager.kubeconfig" }
+    - {src: "scheduler.kubeconfig.j2",dest: "/etc/kubernetes/scheduler.kubeconfig" }
+
+- name: "Distribution master config"
+  template:
+    src: "{{ item.src }}"
+    owner: kube
+    group: kube
+    mode: 0640
+    dest: "{{ item.dest }}"
+  with_items:
+    - {src: "kube-apiserver.conf.j2",dest: "/etc/kubernetes/kube-apiserver.conf" }
+    - {src: "kube-controller-manager.conf.j2",dest: "/etc/kubernetes/kube-controller-manager.conf" }
+    - {src: "kube-scheduler.conf.j2",dest: "/etc/kubernetes/kube-scheduler.conf" }
+    - {src: "audit-policy.yaml.j2",dest: "/etc/kubernetes/audit-policy.yaml" }
+
+- name: "Distribution master systemd unit"
+  template:
+    src: "{{ item.src }}"
+    owner: root
+    group: root
+    mode: 0644
+    dest: "{{ item.dest }}"
+  with_items:
+    - {src: "kube-apiserver.service.j2",dest: "/usr/lib/systemd/system/kube-apiserver.service" }
+    - {src: "kube-controller-manager.service.j2",dest: "/usr/lib/systemd/system/kube-controller-manager.service" }
+    - {src: "kube-scheduler.service.j2",dest: "/usr/lib/systemd/system/kube-scheduler.service" }
+
+- name: "Restart kube-apiserver"
+  systemd:
+    name: kube-apiserver
+    state: restarted
+    daemon_reload: yes
+    enabled: yes
+
+- name: "Restart kube-controller-manager"
+  systemd:
+    name: kube-controller-manager
+    state: restarted
+    daemon_reload: yes
+    enabled: yes
+
+- name: "Restart kube-scheduler"
+  systemd:
+    name: kube-scheduler
+    state: restarted
+    daemon_reload: yes
+    enabled: yes
+
+- name: "Add kubectl completion"
+  lineinfile:
+    dest: "/etc/profile"
+    line: "source <(kubectl completion bash)"
+    state: present
+
+- name: "Waiting kube-apiserver starting"
+  wait_for:
+    host: "{{ ansible_default_ipv4.address }}"
+    port: 6443
+    delay: 5
+    sleep: 2
+
+- name: "Waiting kube-controller-manager starting"
+  wait_for:
+    host: "{{ ansible_default_ipv4.address }}"
+    port: 10257
+    delay: 5
+    sleep: 2
+
+- name: "Waiting kube-scheduler starting"
+  wait_for:
+    host: "{{ ansible_default_ipv4.address }}"
+    port: 10259
+    delay: 5
+    sleep: 2
+
+- name: "Kube-apiserver health check"
+  uri:
+    url: "https://{{ ansible_default_ipv4.address }}:6443/healthz"
+    return_content: yes
+    validate_certs: no
+    client_cert: "{{ cert.dir }}/{{ ansible_default_ipv4.address }}/admin.pem"
+    client_key: "{{ cert.dir }}/{{ ansible_default_ipv4.address }}/admin.key"
+  register: apiserver
+  failed_when: "'ok' not in apiserver.content"
+  connection: local
+
+- name: "Kube-controller-manager health check"
+  uri:
+    url: "https://{{ ansible_default_ipv4.address }}:10257/healthz"
+    return_content: yes
+    validate_certs: no
+  register: controller
+  failed_when: "'ok' not in controller.content"
+  connection: local
+
+- name: "Kube-scheduler health check"
+  uri:
+    url: "https://{{ ansible_default_ipv4.address }}:10259/healthz"
+    return_content: yes
+    validate_certs: no
+  register: scheduler
+  failed_when: "'ok' not in scheduler.content"
+  connection: local

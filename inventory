@@ -1,0 +1,19 @@
+#本组内填写etcd服务器及主机名
+[etcd]
+192.168.153.201
+192.168.153.202
+192.168.153.211
+
+#本组内填写master服务器及主机名
+[master]
+192.168.153.201 hostname=k8s-master-01
+192.168.153.202 hostname=k8s-master-02
+
+[haproxy]
+192.168.153.201 type=MASTER priority=100
+192.168.153.202 type=BACKUP priority=90
+
+#本组内填写worker服务器及主机名
+[worker]
+192.168.153.211 hostname=k8s-worker-01
+192.168.153.212 hostname=k8s-worker-02

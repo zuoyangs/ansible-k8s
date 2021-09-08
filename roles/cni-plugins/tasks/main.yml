@@ -1,0 +1,50 @@
+---
+- name: "Create cni-plugins directory"
+  file:
+    path: "/opt/cni/bin/"
+    owner: root
+    group: root
+    mode: 0755
+    state: directory
+
+- name: "Create cni-plugins unarchive directory"
+  file:
+    path: "/tmp/cni-plugins-linux-amd64-{{kubernetes.cni_plugins_version}}"
+    owner: root
+    group: root
+    mode: 0755
+    state: directory
+
+    #- stat:
+    #    path: "/tmp/cni-plugins-linux-amd64-{{kubernetes.cni_plugins_version}}.tgz"
+    #  register: cni_plugins_linux_amd64
+    #  run_once: true
+    #  delegate_to: 127.0.0.1
+
+    #- name: "Get cni-plugins"
+    #  #  when: not cni_plugins_linux_amd64.exists
+    #  get_url:
+    #    url: "https://github.91chifun.workers.dev/https://github.com//containernetworking/plugins/releases/download/{{kubernetes.cni_plugins_version}}/cni-plugins-linux-amd64-{{kubernetes.cni_plugins_version}}.tgz"
+    #    dest: "/tmp/"
+    #  run_once: true
+    #  delegate_to: 127.0.0.1
+
+- name: "copy /tmp/cni-plugins-linux-amd64-v0.8.7.tgz master worker nodes"
+  synchronize:
+    src: "/tmp/cni-plugins-linux-amd64-v0.8.7.tgz"
+    dest: "/tmp/"
+    mode: push
+
+- name: "unarchive cni-plugins-linux-amd64-{{kubernetes.cni_plugins_version}}.tgz"
+  unarchive:
+    src: "/tmp/cni-plugins-linux-amd64-{{kubernetes.cni_plugins_version}}.tgz"
+    dest: "/tmp/cni-plugins-linux-amd64-{{kubernetes.cni_plugins_version}}/"
+    owner: root
+    group: root
+    mode: 0640
+    remote_src: yes
+
+- name: "copy tmp/cni-plugins-linux-amd64-{{kubernetes.cni_plugins_version}}.tgz master worker nodes"
+  copy:
+    src: "/tmp/cni-plugins-linux-amd64-{{kubernetes.cni_plugins_version}}/"
+    dest: "/opt/cni/bin/" 

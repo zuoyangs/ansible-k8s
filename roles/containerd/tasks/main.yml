@@ -1,0 +1,55 @@
+---
+- name: Install the yum-utils package. which provides the yum-config-manager utility
+  shell: yum install -y yum-utils device-mapper-persistent-data lvm2
+  #yum:
+  #  name: "{{ item }}"
+  #  state: installed
+  #with-items:
+  #  - 'yum-utils'
+  #  - 'device-mapper-persistent-data'
+  #  - 'lvm2'
+
+- name: "Add containerd repo"
+  shell: "yum-config-manager --add-repo http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo"
+
+  #- name "Older versions of Docker were called docker or docker-engine. If these are installed,uninstall them, along with associated dependencies.)"
+ #  shell: yum remove -y containerd.io docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate  docker-engine
+
+  #
+  #- name: Older versions of Docker were called docker or docker-engine. If these are installed,uninstall them, along with associated dependencies.)
+  #  yum:
+  #    name: "{{ item }}"
+  #    state: removed
+  #  with-items:
+  #    - 'containerd.io{% if containerd.version is defined and containerd.version != ""  %}-{{ containerd.version }}{% endif %}'
+  #    - 'docker'
+  #    - 'docker-client'
+  #    - 'docker-client-latest'
+  #    - 'docker-common'
+  #    - 'docker-latest'
+  #    - 'docker-latest-logrotate'
+  #    - 'docker-logrotate'
+  #    - 'docker-engine'
+
+- name: yum install containerd.io{% if containerd.version is defined and containerd.version != ""  %}-{{ containerd.version }}{% endif %}
+  yum:
+    name: containerd.io{% if containerd.version is defined and containerd.version != ""  %}-{{ containerd.version }}{% endif %}
+    state: installed
+
+- name: "Create containerd directory"
+  file:
+    path: "{{ containerd.root }}"
+    owner: root
+    group: root
+    mode: 0755
+    state: directory
+
+- name: "Set containerd config"
+  template:
+    src: "config.toml.j2"
+    dest: "/etc/containerd/config.toml"
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - restart containerd
